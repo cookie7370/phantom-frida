@@ -6,7 +6,7 @@ on:
       frida_version:
         description: 'Frida version (e.g. 17.7.2)'
         required: true
-        default: '17.7.2'
+        default: '17.6.1' # 에러 발생했던 버전으로 디폴트 변경
       custom_name:
         description: 'Custom name (replaces "frida" everywhere)'
         required: true
@@ -14,7 +14,7 @@ on:
       arch:
         description: 'Target architecture(s)'
         required: true
-        default: 'android-arm64'
+        default: 'android-arm64,android-arm,android-x86_64,android-x86'
         type: choice
         options:
           - android-arm64
@@ -58,21 +58,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential curl git python3 unzip
 
-      # Cache NDK (~1.5 GB) — saves ~3 min on subsequent runs
+      # 1. Cache NDK r25c로 경로 및 키 변경
       - name: Cache NDK
         uses: actions/cache@v4
         id: ndk-cache
         with:
-          path: build/android-ndk-r29
-          key: ndk-r29-linux
+          path: build/android-ndk-r25c
+          key: ndk-r25c-linux
 
+      # 2. 다운로드 URL 및 압축 해제 경로를 NDK r25c로 변경
       - name: Download NDK
         if: steps.ndk-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p build
-          curl -L -o build/android-ndk-r29-linux.zip \
-            https://dl.google.com/android/repository/android-ndk-r29-linux.zip
-          cd build && unzip -q android-ndk-r29-linux.zip && rm android-ndk-r29-linux.zip
+          curl -L -o build/android-ndk-r25c-linux.zip \
+            https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          cd build && unzip -q android-ndk-r25c-linux.zip && rm android-ndk-r25c-linux.zip
 
       # Cache Frida source tree — saves ~5 min clone time
       - name: Cache Frida source
@@ -99,13 +100,14 @@ jobs:
           git clean -fdx || true
           rm -rf build/
 
+      # 3. 빌드 명령어로 전달되는 NDK 타겟 경로를 r25c로 변경
       - name: Build command
         id: cmd
         run: |
           CMD="python3 build.py --version ${{ inputs.frida_version }}"
           CMD="$CMD --name ${{ inputs.custom_name }}"
           CMD="$CMD --arch ${{ inputs.arch }}"
-          CMD="$CMD --skip-clone --ndk-path build/android-ndk-r29"
+          CMD="$CMD --skip-clone --ndk-path build/android-ndk-r25c"
           CMD="$CMD --verify"
 
           if [ -n "${{ inputs.port }}" ]; then
