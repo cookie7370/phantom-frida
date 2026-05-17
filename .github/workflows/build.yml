@@ -6,7 +6,7 @@ on:
       frida_version:
         description: 'Frida version (e.g. 17.7.2)'
         required: true
-        default: '17.6.1'
+        default: '17.9.9' # 최신 타겟 버전으로 디폴트 변경
       custom_name:
         description: 'Custom name (replaces "frida" everywhere)'
         required: true
@@ -14,7 +14,7 @@ on:
       arch:
         description: 'Target architecture(s)'
         required: true
-        default: 'android-arm64,android-x86_64' # 편의를 위해 arm64와 x86_64를 기본값으로 세팅
+        default: 'android-arm64,android-x86_64'
         type: choice
         options:
           - android-arm64
@@ -58,21 +58,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential curl git python3 unzip
 
-      # Cache NDK r25c
+      # 1. Cache NDK r29로 경로 및 키 복구
       - name: Cache NDK
         uses: actions/cache@v4
         id: ndk-cache
         with:
-          path: build/android-ndk-r25c
-          key: ndk-r25c-linux
+          path: build/android-ndk-r29
+          key: ndk-r29-linux
 
+      # 2. 다운로드 주소를 다시 r29로 변경
       - name: Download NDK
         if: steps.ndk-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p build
-          curl -L -o build/android-ndk-r25c-linux.zip \
-            https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
-          cd build && unzip -q android-ndk-r25c-linux.zip && rm android-ndk-r25c-linux.zip
+          curl -L -o build/android-ndk-r29-linux.zip \
+            https://dl.google.com/android/repository/android-ndk-r29-linux.zip
+          cd build && unzip -q android-ndk-r29-linux.zip && rm android-ndk-r29-linux.zip
 
       # Cache Frida source tree
       - name: Cache Frida source
@@ -88,10 +89,9 @@ jobs:
           git clone --recurse-submodules --branch ${{ inputs.frida_version }} --depth 1 \
             https://github.com/frida/frida.git build/frida
 
-      # 빌드 코어 스크립트 수정 (멀티 아키텍처 순회 빌드 로직)
+      # 멀티 아키텍처 순회 빌드 로직
       - name: Run Build for each architecture
         run: |
-          # 입력받은 아키텍처 배열을 콤마(,) 기준으로 분리
           IFS=',' read -r -a arch_array <<< "${{ inputs.arch }}"
           
           for arch in "${arch_array[@]}"; do
@@ -99,7 +99,6 @@ jobs:
             echo "[START] Building for architecture: $arch"
             echo "============================================================"
             
-            # 1. 이전 빌드에서 오염된 프리다 소스 트리를 완전히 태초의 상태로 클린업 (Wipe 대응)
             cd build/frida
             git checkout -- .
             git submodule foreach --recursive 'git checkout -- . || true'
@@ -107,11 +106,11 @@ jobs:
             rm -rf build/
             cd ../..
             
-            # 2. 이번 아키텍처 전용 실행 커맨드 조립
+            # 3. 파라미터 ndk-path도 r29로 원복
             CMD="python3 build.py --version ${{ inputs.frida_version }}"
             CMD="$CMD --name ${{ inputs.custom_name }}"
             CMD="$CMD --arch $arch"
-            CMD="$CMD --skip-clone --ndk-path build/android-ndk-r25c"
+            CMD="$CMD --skip-clone --ndk-path build/android-ndk-r29"
             CMD="$CMD --verify"
 
             if [ -n "${{ inputs.port }}" ]; then
@@ -126,7 +125,6 @@ jobs:
               CMD="$CMD --temp-fixes"
             fi
             
-            # 3. 컴파일 실행
             echo "Executing: $CMD"
             $CMD
             
