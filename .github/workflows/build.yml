@@ -6,7 +6,7 @@ on:
       frida_version:
         description: 'Frida version (e.g. 17.5.2)'
         required: true
-        default: '17.5.2' # 17.5.2 버전으로 기본값 고정
+        default: '17.5.2'
       custom_name:
         description: 'Custom name (replaces "frida" everywhere)'
         required: true
@@ -14,7 +14,7 @@ on:
       arch:
         description: 'Target architecture(s)'
         required: true
-        default: 'android-arm64,android-x86_64' # 요청하신 두 아키텍처 기본 지정
+        default: 'android-arm64,android-x86_64'
         type: choice
         options:
           - android-arm64
@@ -58,7 +58,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential curl git python3 unzip
 
-      # 1. 17.5.2용 NDK r25c 캐시 설정
+      # Cache NDK r25c
       - name: Cache NDK
         uses: actions/cache@v4
         id: ndk-cache
@@ -66,7 +66,7 @@ jobs:
           path: build/android-ndk-r25c
           key: ndk-r25c-linux
 
-      # 2. 17.5.2용 NDK r25c 다운로드 주소 세팅
+      # Download NDK r25c
       - name: Download NDK
         if: steps.ndk-cache.outputs.cache-hit != 'true'
         run: |
@@ -89,7 +89,7 @@ jobs:
           git clone --recurse-submodules --branch ${{ inputs.frida_version }} --depth 1 \
             https://github.com/frida/frida.git build/frida
 
-      # 아키텍처 순회 빌드 로직 (Wipe 자동 리셋 기능 포함)
+      # 멀티 아키텍처 순회 빌드 로직 (Wipe 자동 처리 포함)
       - name: Run Build for each architecture
         run: |
           IFS=',' read -r -a arch_array <<< "${{ inputs.arch }}"
@@ -106,7 +106,7 @@ jobs:
             rm -rf build/
             cd ../..
             
-            # 3. 파라미터 ndk-path를 r25c 경로로 정확하게 매칭
+            # 파라미터 ndk-path를 r25c로 지정
             CMD="python3 build.py --version ${{ inputs.frida_version }}"
             CMD="$CMD --name ${{ inputs.custom_name }}"
             CMD="$CMD --arch $arch"
@@ -152,11 +152,12 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
+      # [수정 완료] 잘못된 컨텍스트 문법을 ${{ inputs.custom_name }} 으로 정상화
       - name: Upload gadget artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.custom_name }}-gadget-${{ inputs.frida_version }}
-          path: output/${{ actions.github.event.inputs.custom_name }}-gadget-*.gz
+          path: output/${{ inputs.custom_name }}-gadget-*.gz
           retention-days: 30
           if-no-files-found: ignore
 
