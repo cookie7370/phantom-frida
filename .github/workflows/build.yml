@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       frida_version:
-        description: 'Frida version (e.g. 17.7.2)'
+        description: 'Frida version (e.g. 17.5.2)'
         required: true
-        default: '17.9.9' # 최신 타겟 버전으로 디폴트 변경
+        default: '17.5.2' # 17.5.2 버전으로 기본값 고정
       custom_name:
         description: 'Custom name (replaces "frida" everywhere)'
         required: true
@@ -14,7 +14,7 @@ on:
       arch:
         description: 'Target architecture(s)'
         required: true
-        default: 'android-arm64,android-x86_64'
+        default: 'android-arm64,android-x86_64' # 요청하신 두 아키텍처 기본 지정
         type: choice
         options:
           - android-arm64
@@ -58,22 +58,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential curl git python3 unzip
 
-      # 1. Cache NDK r29로 경로 및 키 복구
+      # 1. 17.5.2용 NDK r25c 캐시 설정
       - name: Cache NDK
         uses: actions/cache@v4
         id: ndk-cache
         with:
-          path: build/android-ndk-r29
-          key: ndk-r29-linux
+          path: build/android-ndk-r25c
+          key: ndk-r25c-linux
 
-      # 2. 다운로드 주소를 다시 r29로 변경
+      # 2. 17.5.2용 NDK r25c 다운로드 주소 세팅
       - name: Download NDK
         if: steps.ndk-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p build
-          curl -L -o build/android-ndk-r29-linux.zip \
-            https://dl.google.com/android/repository/android-ndk-r29-linux.zip
-          cd build && unzip -q android-ndk-r29-linux.zip && rm android-ndk-r29-linux.zip
+          curl -L -o build/android-ndk-r25c-linux.zip \
+            https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          cd build && unzip -q android-ndk-r25c-linux.zip && rm android-ndk-r25c-linux.zip
 
       # Cache Frida source tree
       - name: Cache Frida source
@@ -89,7 +89,7 @@ jobs:
           git clone --recurse-submodules --branch ${{ inputs.frida_version }} --depth 1 \
             https://github.com/frida/frida.git build/frida
 
-      # 멀티 아키텍처 순회 빌드 로직
+      # 아키텍처 순회 빌드 로직 (Wipe 자동 리셋 기능 포함)
       - name: Run Build for each architecture
         run: |
           IFS=',' read -r -a arch_array <<< "${{ inputs.arch }}"
@@ -106,11 +106,11 @@ jobs:
             rm -rf build/
             cd ../..
             
-            # 3. 파라미터 ndk-path도 r29로 원복
+            # 3. 파라미터 ndk-path를 r25c 경로로 정확하게 매칭
             CMD="python3 build.py --version ${{ inputs.frida_version }}"
             CMD="$CMD --name ${{ inputs.custom_name }}"
             CMD="$CMD --arch $arch"
-            CMD="$CMD --skip-clone --ndk-path build/android-ndk-r29"
+            CMD="$CMD --skip-clone --ndk-path build/android-ndk-r25c"
             CMD="$CMD --verify"
 
             if [ -n "${{ inputs.port }}" ]; then
@@ -156,7 +156,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.custom_name }}-gadget-${{ inputs.frida_version }}
-          path: output/${{ inputs.custom_name }}-gadget-*.gz
+          path: output/${{ actions.github.event.inputs.custom_name }}-gadget-*.gz
           retention-days: 30
           if-no-files-found: ignore
 
